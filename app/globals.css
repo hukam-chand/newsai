@@ -63,7 +63,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 28px 12px;
+  padding: 8px 22px 10px;
   background: rgba(255, 255, 255, 0.78);
   border-bottom: 1px solid var(--line);
 }
@@ -175,7 +175,7 @@ a {
 }
 
 .news-section {
-  padding: 28px;
+  padding: 20px 22px 24px;
 }
 
 .section-label-row {
@@ -203,7 +203,7 @@ a {
 .story-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
+  gap: 14px;
 }
 
 .story-card {
@@ -213,7 +213,7 @@ a {
   border: 1px solid var(--line);
   border-radius: 18px;
   overflow: hidden;
-  min-height: 320px;
+  min-height: 296px;
 }
 
 .story-image {
@@ -224,10 +224,10 @@ a {
 }
 
 .story-body {
-  padding: 16px 16px 18px;
+  padding: 14px 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
 }
 
