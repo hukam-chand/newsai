@@ -37,7 +37,7 @@ export default function HomePage() {
         <header className="masthead">
           <div className="brand-group">
             <span className="live-pill">Live</span>
-            <span className="brand-name">NEWSAI</span>
+            <span className="brand-name">UHNEWS</span>
           </div>
           <div className="brand-note">Latest headlines • global brief</div>
         </header>

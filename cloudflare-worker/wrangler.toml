@@ -12,7 +12,7 @@ crons = ["*/10 * * * *"]
 # Keep CRON_SECRET out of this file — add it with:
 #   wrangler secret put CRON_SECRET
 [vars]
-SCRAPE_URL = "https://your-app.vercel.app/api/scrape"
+SCRAPE_URL = "https://uhnews.vercel.app/api/scrape"
 
 # Local development values. `wrangler dev` reads .dev.vars (git-ignored).
 # Create cloudflare-worker/.dev.vars with:
