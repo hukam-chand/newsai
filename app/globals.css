@@ -1,13 +1,15 @@
 :root {
-  --page-bg: #f5f1ea;
-  --page-panel: #fffdf9;
-  --card-bg: rgba(255, 255, 255, 0.9);
+  --page-bg: #ffffff;
+  --page-panel: #ffffff;
+  --card-bg: #ffffff;
   --line: rgba(15, 23, 42, 0.08);
   --text: #181a1f;
   --muted: rgba(24, 26, 31, 0.7);
   --accent: #d0912a;
   --accent-strong: #b66b1c;
   --shadow: rgba(15, 23, 42, 0.08);
+  --skeleton-base: rgba(15, 23, 42, 0.04);
+  --skeleton-highlight: rgba(15, 23, 42, 0.1);
 }
 
 * {
@@ -45,15 +47,16 @@ a {
 }
 
 .news-shell {
-  width: min(1280px, 100%);
+  width: 100%;
   display: flex;
   justify-content: center;
 }
 
 .news-page {
-  width: min(1280px, 100%);
+  width: 100%;
+  max-width: none;
   background: var(--page-panel);
-  border: 1px solid var(--line);
+  border: none;
   border-radius: 0;
   overflow: hidden;
   box-shadow: none;
@@ -243,16 +246,25 @@ a {
   margin: 0;
   font-size: 1.05rem;
   line-height: 1.35;
-  color: #f7f7f5;
+  color: var(--text);
   font-family: Georgia, "Times New Roman", serif;
   font-weight: 600;
 }
 
 .story-summary {
   margin: 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
   line-height: 1.6;
   font-size: 0.8rem;
+}
+
+.story-card .story-footer,
+.story-card .story-category,
+.story-card .story-link,
+.related-card .story-footer,
+.related-card .story-category,
+.related-card .story-link {
+  color: var(--text);
 }
 
 .story-footer {
@@ -287,7 +299,7 @@ a {
 .skeleton-card,
 .skeleton-block,
 .skeleton-line {
-  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+  background: linear-gradient(90deg, var(--skeleton-base), var(--skeleton-highlight), var(--skeleton-base));
   background-size: 200% 100%;
   animation: shimmer 1.35s ease-in-out infinite;
 }
@@ -378,8 +390,8 @@ a {
 }
 
 .load-more-button {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  background: var(--page-panel);
   color: var(--text);
   border-radius: 999px;
   padding: 0.9rem 1.5rem;
@@ -395,9 +407,9 @@ a {
   width: fit-content;
   border-radius: 999px;
   padding: 0.65rem 0.9rem;
-  border: 1px solid rgba(255,255,255,0.18);
+  border: 1px solid var(--line);
   color: var(--text);
-  background: rgba(255,255,255,0.03);
+  background: rgba(208, 145, 42, 0.08);
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -417,11 +429,11 @@ a {
 }
 
 .detail-card {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 }
 
 .detail-cover {
@@ -454,7 +466,7 @@ a {
 }
 
 .detail-summary {
-  color: rgba(255,255,255,0.82);
+  color: var(--text);
   font-size: 1.06rem;
   line-height: 1.8;
   max-width: 760px;
@@ -485,8 +497,9 @@ a {
 }
 
 .detail-secondary {
-  background: rgba(255,255,255,0.03);
+  background: var(--page-panel);
   border: 1px solid var(--line);
+  color: var(--text);
 }
 
 .related-grid {
@@ -497,7 +510,7 @@ a {
 }
 
 .related-card {
-  background: rgba(17, 19, 24, 0.82);
+  background: rgba(255, 255, 255, 0.88);
   border: 1px solid var(--line);
   border-radius: 18px;
   overflow: hidden;
