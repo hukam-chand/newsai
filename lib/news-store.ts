@@ -6,6 +6,7 @@ export type NewsItem = {
   id: string;
   title: string;
   summary: string;
+  content?: string;
   source: string;
   publishedAt: string;
   image: string;
@@ -37,6 +38,7 @@ const FALLBACK_ITEMS: NewsItem[] = [
     id: "fallback-1",
     title: "Global leaders unveil a bold new vision for cleaner cities and smarter futures.",
     summary: "An emerging coalition of municipal leaders is defining a new standard for resilient urban policy.",
+    content: "City leaders are moving beyond short-term policy fixes and toward long-term urban resilience. The new consensus emphasizes cleaner transport, climate-ready infrastructure, and smarter civic planning. Officials say the next generation of public investment must balance sustainability with growth, affordability, and liveability.",
     source: "Google News",
     publishedAt: new Date().toISOString(),
     image: FALLBACK_IMAGES[0],
@@ -192,10 +194,13 @@ function parseRssXml(xml: string, sourceName: string): NewsItem[] {
     const isoDate = new Date(publishedAt || Date.now()).toISOString();
     const category = categoryFromTitle(cleanTitle);
 
+    const summary = description || `${cleanTitle} — a timely update from the current news cycle.`;
+
     entries.push({
       id: toId(`${cleanTitle}-${url}`),
       title: cleanTitle,
-      summary: description || `${cleanTitle} — a timely update from the current news cycle.`,
+      summary,
+      content: summary,
       source: sourceName,
       publishedAt: isoDate,
       image: FALLBACK_IMAGES[entries.length % FALLBACK_IMAGES.length],
@@ -214,8 +219,12 @@ function parseGoogleNewsXml(xml: string): NewsItem[] {
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE ||
+    process.env.SUPABASE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !serviceKey) {
     return null;
@@ -242,6 +251,7 @@ function mapSupabaseRow(row: {
     id: String(row.id),
     title: row.title,
     summary,
+    content: summary,
     source: row.source,
     publishedAt,
     image: FALLBACK_IMAGES[Number(String(row.id).slice(-1)) % FALLBACK_IMAGES.length],
