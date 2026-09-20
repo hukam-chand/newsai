@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,6 +10,12 @@ export const metadata: Metadata = {
   description:
     "UHNEWS delivers trusted global and local news coverage, expert analysis, and daily headlines in a clean editorial format.",
   applicationName: "UHNEWS",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "UHNEWS",
+  },
   alternates: {
     canonical: "/",
   },
@@ -34,6 +40,12 @@ export const metadata: Metadata = {
     description:
       "UHNEWS delivers trusted global and local news coverage, expert analysis, and daily headlines in a clean editorial format.",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f5f1ea",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
