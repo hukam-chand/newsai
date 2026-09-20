@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { createClient } from "@supabase/supabase-js";
 
 export type NewsItem = {
   id: string;
@@ -167,26 +168,35 @@ function toId(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function parseGoogleNewsXml(xml: string): NewsItem[] {
-  const itemPattern = /<item>[\s\S]*?<title>(?:<!\[CDATA\[)?(.*?)?(?:\]\]>)?<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>/gi;
+const RSS_SOURCES = [
+  { name: "Google News", url: "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en" },
+  { name: "BBC News", url: "https://feeds.bbci.co.uk/news/world/rss.xml" },
+  { name: "The Hindu", url: "https://www.thehindu.com/feeder/default.rss" },
+  { name: "NPR", url: "https://feeds.npr.org/1001/rss.xml" },
+];
+
+function parseRssXml(xml: string, sourceName: string): NewsItem[] {
+  const itemPattern =
+    /<item>[\s\S]*?<title>(?:<!\[CDATA\[)?(.*?)?(?:\]\]>)?<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?(?:<pubDate>(.*?)<\/pubDate>|<published>(.*?)<\/published>|<dc:date>(.*?)<\/dc:date>)[\s\S]*?(?:<description>(?:<!\[CDATA\[)?(.*?)?(?:\]\]>)?<\/description>|<content:encoded>(?:<!\[CDATA\[)?(.*?)?(?:\]\]>)?<\/content:encoded>)/gi;
   const entries: NewsItem[] = [];
 
   for (const match of xml.matchAll(itemPattern)) {
     const title = normalizeTitle(match[1] ?? "");
     const url = stripHtml(match[2] ?? "").trim();
-    const publishedAt = stripHtml(match[3] ?? "").trim();
+    const publishedAt = stripHtml(match[3] ?? match[4] ?? match[5] ?? "").trim();
+    const description = stripHtml(match[6] ?? match[7] ?? "").trim();
 
     if (!title || !url) continue;
 
-    const isoDate = new Date(publishedAt).toISOString();
-    const cleanTitle = title.replace(/\s*\|\s*Google News.*$/i, "").trim();
+    const cleanTitle = title.replace(new RegExp(`\\s*\\|\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*$`, "i"), "").trim();
+    const isoDate = new Date(publishedAt || Date.now()).toISOString();
     const category = categoryFromTitle(cleanTitle);
 
     entries.push({
       id: toId(`${cleanTitle}-${url}`),
       title: cleanTitle,
-      summary: `${cleanTitle} — a timely update from the current news cycle.`,
-      source: "Google News",
+      summary: description || `${cleanTitle} — a timely update from the current news cycle.`,
+      source: sourceName,
       publishedAt: isoDate,
       image: FALLBACK_IMAGES[entries.length % FALLBACK_IMAGES.length],
       url,
@@ -197,11 +207,68 @@ function parseGoogleNewsXml(xml: string): NewsItem[] {
   return entries.slice(0, 12);
 }
 
+function parseGoogleNewsXml(xml: string): NewsItem[] {
+  return parseRssXml(xml, "Google News");
+}
+
+function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE ||
+    process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !serviceKey) {
+    return null;
+  }
+
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+function mapSupabaseRow(row: {
+  id: number | string;
+  title: string;
+  url: string;
+  source: string;
+  published_at?: string | null;
+  scraped_at?: string | null;
+  content?: string | null;
+}): NewsItem {
+  const publishedAt = row.published_at || row.scraped_at || new Date().toISOString();
+  const summary = row.content && row.content.trim() ? row.content : `${row.title} — a timely update from the current news cycle.`;
+
+  return {
+    id: String(row.id),
+    title: row.title,
+    summary,
+    source: row.source,
+    publishedAt,
+    image: FALLBACK_IMAGES[Number(String(row.id).slice(-1)) % FALLBACK_IMAGES.length],
+    url: row.url,
+    category: categoryFromTitle(row.title),
+  };
+}
+
 async function ensureDirectory(): Promise<void> {
   await fs.mkdir(path.dirname(STORAGE_FILE), { recursive: true });
 }
 
 async function readStoredNews(): Promise<NewsItem[]> {
+  const supabase = getSupabaseClient();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("news")
+      .select("id, title, content, url, source, published_at, scraped_at")
+      .order("scraped_at", { ascending: false })
+      .limit(30);
+
+    if (!error && data && data.length) {
+      return data.map(mapSupabaseRow);
+    }
+  }
+
   try {
     await ensureDirectory();
     const raw = await fs.readFile(STORAGE_FILE, "utf-8");
@@ -222,22 +289,73 @@ export async function getLatestNews(): Promise<NewsItem[]> {
 }
 
 export async function refreshNewsFromGoogle(): Promise<NewsItem[]> {
-  const rssUrl = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en";
-  const response = await fetch(rssUrl, {
-    headers: {
-      "User-Agent": "Mozilla/5.0",
-      Accept: "application/rss+xml, application/xml, text/xml, */*",
-    },
-    next: { revalidate: 600 },
-  });
+  const byUrl = new Map<string, NewsItem>();
+  const details: Record<string, number> = {};
 
-  if (!response.ok) {
-    throw new Error(`Google RSS fetch failed: ${response.status}`);
+  for (const source of RSS_SOURCES) {
+    try {
+      const response = await fetch(source.url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Accept: "application/rss+xml, application/xml, text/xml, */*",
+        },
+        next: { revalidate: 600 },
+      });
+
+      if (!response.ok) {
+        details[source.name] = 0;
+        continue;
+      }
+
+      const xml = await response.text();
+      const items = parseRssXml(xml, source.name);
+      details[source.name] = items.length;
+
+      for (const item of items) {
+        if (!byUrl.has(item.url)) {
+          byUrl.set(item.url, item);
+        }
+      }
+    } catch {
+      details[source.name] = 0;
+    }
   }
 
-  const xml = await response.text();
-  const items = parseGoogleNewsXml(xml);
-  const result = items.length ? items : FALLBACK_ITEMS;
+  const result = byUrl.size
+    ? Array.from(byUrl.values()).sort(
+        (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+      )
+    : FALLBACK_ITEMS;
+
+  const supabase = getSupabaseClient();
+
+  if (supabase) {
+    const rows = result.map((item) => ({
+      title: item.title,
+      content: item.summary,
+      url: item.url,
+      source: item.source,
+      published_at: item.publishedAt,
+      scraped_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from("news").upsert(rows, {
+      onConflict: "url",
+      ignoreDuplicates: false,
+    });
+
+    if (!error) {
+      const { data, error: readError } = await supabase
+        .from("news")
+        .select("id, title, content, url, source, published_at, scraped_at")
+        .order("scraped_at", { ascending: false })
+        .limit(30);
+
+      if (!readError && data && data.length) {
+        return data.map(mapSupabaseRow);
+      }
+    }
+  }
 
   await writeStoredNews(result);
   return result;

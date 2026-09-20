@@ -14,12 +14,18 @@ export async function GET(request: Request) {
 
   try {
     const items = await refreshNewsFromGoogle();
+    const details = {
+      "Google News": items.filter((item) => item.source === "Google News").length,
+      "BBC News": items.filter((item) => item.source === "BBC News").length,
+      "The Hindu": items.filter((item) => item.source === "The Hindu").length,
+      NPR: items.filter((item) => item.source === "NPR").length,
+    };
 
     return NextResponse.json({
       scraped: items.length,
-      sites: 1,
+      sites: Object.values(details).filter(Boolean).length,
       time: new Date().toISOString(),
-      details: { "Google News": items.length },
+      details,
     });
   } catch (error) {
     return NextResponse.json(

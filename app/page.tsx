@@ -1,7 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { NewsItem } from "@/lib/news-store";
+
+function StorySkeleton() {
+  return (
+    <article className="story-card skeleton-card" aria-hidden="true">
+      <div className="story-image skeleton-block" />
+      <div className="story-body">
+        <div className="skeleton-line short" />
+        <div className="skeleton-line long" />
+        <div className="skeleton-line medium" />
+        <div className="skeleton-row">
+          <div className="skeleton-line tiny" />
+          <div className="skeleton-line tiny" />
+        </div>
+      </div>
+    </article>
+  );
+}
 
 export default function HomePage() {
   const [stories, setStories] = useState<NewsItem[]>([]);
@@ -43,7 +61,28 @@ export default function HomePage() {
         </header>
 
         {loading ? (
-          <div className="loading-state">Loading top stories…</div>
+          <>
+            <div className="feature-hero skeleton-hero" aria-hidden="true">
+              <div className="hero-content-panel">
+                <div className="skeleton-line short hero-tag-skeleton" />
+                <div className="skeleton-line long hero-title-skeleton" />
+                <div className="skeleton-line medium hero-meta-skeleton" />
+                <div className="skeleton-line button-skeleton" />
+              </div>
+            </div>
+
+            <section className="news-section" aria-label="Loading latest stories">
+              <div className="section-label-row">
+                <div className="skeleton-line short" />
+                <div className="skeleton-line tiny" />
+              </div>
+              <div className="story-grid">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <StorySkeleton key={index} />
+                ))}
+              </div>
+            </section>
+          </>
         ) : featuredStory ? (
           <>
             <main
@@ -60,9 +99,9 @@ export default function HomePage() {
                   <span className="meta-divider">•</span>
                   <span>{new Date(featuredStory.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                 </div>
-                <button type="button" className="read-more-button">
+                <Link href={`/news/${featuredStory.id}`} className="read-more-button">
                   Read full story
-                </button>
+                </Link>
               </div>
             </main>
 
@@ -88,6 +127,9 @@ export default function HomePage() {
                         <span>{story.source}</span>
                         <span>{new Date(story.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                       </div>
+                      <Link href={`/news/${story.id}`} className="story-link">
+                        Read article
+                      </Link>
                     </div>
                   </article>
                 ))}
