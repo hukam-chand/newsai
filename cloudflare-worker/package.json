@@ -1,0 +1,13 @@
+{
+  "name": "newsai-cron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that triggers the NewsAI scraper every 10 minutes.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}
