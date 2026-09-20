@@ -150,20 +150,51 @@ function categoryFromTitle(title: string): string {
   return "World Affairs";
 }
 
-function stripHtml(value: string): string {
+function decodeHtmlEntities(value: string): string {
   return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#x2F;/gi, "/")
+    .replace(/&#039;/gi, "'")
+    .replace(/&#8217;/gi, "'")
+    .replace(/&#8216;/gi, "'")
+    .replace(/&#8220;/gi, '"')
+    .replace(/&#8221;/gi, '"')
+    .replace(/&#8211;/gi, "-")
+    .replace(/&#8212;/gi, "—");
+}
+
+function stripHtml(value: string): string {
+  const decoded = decodeHtmlEntities(value);
+  return decoded
     .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function normalizeTitle(value: string): string {
   return stripHtml(value).replace(/^\s*[-–—]\s*/, "").trim();
+}
+
+function normalizeStoryText(value: string): string {
+  const cleaned = stripHtml(value)
+    .replace(/\s*\n\s*/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .trim();
+
+  return cleaned || "A timely update from UHNEWS.";
+}
+
+function buildSummaryFromContent(value: string): string {
+  const cleaned = normalizeStoryText(value);
+  if (cleaned.length <= 180) return cleaned;
+  return `${cleaned.slice(0, 177).trimEnd()}...`;
 }
 
 function toId(value: string): string {
@@ -186,21 +217,21 @@ function parseRssXml(xml: string, sourceName: string): NewsItem[] {
     const title = normalizeTitle(match[1] ?? "");
     const url = stripHtml(match[2] ?? "").trim();
     const publishedAt = stripHtml(match[3] ?? match[4] ?? match[5] ?? "").trim();
-    const description = stripHtml(match[6] ?? match[7] ?? "").trim();
+    const rawBody = (match[6] ?? match[7] ?? "").trim();
+    const content = normalizeStoryText(rawBody || `${title} — a timely update from the current news cycle.`);
 
     if (!title || !url) continue;
 
     const cleanTitle = title.replace(new RegExp(`\\s*\\|\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*$`, "i"), "").trim();
     const isoDate = new Date(publishedAt || Date.now()).toISOString();
     const category = categoryFromTitle(cleanTitle);
-
-    const summary = description || `${cleanTitle} — a timely update from the current news cycle.`;
+    const summary = buildSummaryFromContent(content);
 
     entries.push({
       id: toId(`${cleanTitle}-${url}`),
       title: cleanTitle,
       summary,
-      content: summary,
+      content,
       source: sourceName,
       publishedAt: isoDate,
       image: FALLBACK_IMAGES[entries.length % FALLBACK_IMAGES.length],
@@ -245,13 +276,15 @@ function mapSupabaseRow(row: {
   content?: string | null;
 }): NewsItem {
   const publishedAt = row.published_at || row.scraped_at || new Date().toISOString();
-  const summary = row.content && row.content.trim() ? row.content : `${row.title} — a timely update from the current news cycle.`;
+  const fullContent = row.content && row.content.trim()
+    ? normalizeStoryText(row.content)
+    : normalizeStoryText(`${row.title} — a timely update from the current news cycle.`);
 
   return {
     id: String(row.id),
     title: row.title,
-    summary,
-    content: summary,
+    summary: buildSummaryFromContent(fullContent),
+    content: fullContent,
     source: row.source,
     publishedAt,
     image: FALLBACK_IMAGES[Number(String(row.id).slice(-1)) % FALLBACK_IMAGES.length],

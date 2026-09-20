@@ -1,11 +1,25 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { toArticleSlug } from "@/lib/article-utils";
 import { getLatestNews } from "@/lib/news-store";
+
+function matchArticle(stories: Awaited<ReturnType<typeof getLatestNews>>, id: string) {
+  const decodedId = decodeURIComponent(id);
+  const numericId = Number(decodedId.split("-").pop() ?? decodedId);
+
+  return (
+    stories.find((item) => toArticleSlug(item) === decodedId) ??
+    stories.find((item) => String(item.id) === decodedId) ??
+    stories.find((item) => Number(item.id) === numericId) ??
+    stories.find((item) => item.url === decodedId || item.url === decodeURIComponent(id))
+  );
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const article = (await getLatestNews()).find((item) => item.id === decodeURIComponent(id));
+  const stories = await getLatestNews();
+  const article = matchArticle(stories, id);
 
   if (!article) {
     return {
@@ -18,7 +32,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     title: article.title,
     description: article.summary,
     alternates: {
-      canonical: `/news/${article.id}`,
+      canonical: `/news/${toArticleSlug(article)}`,
     },
     openGraph: {
       title: article.title,
@@ -38,16 +52,29 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function NewsDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const stories = await getLatestNews();
-  const article = stories.find((item) => item.id === decodeURIComponent(id));
+  const article = matchArticle(stories, id);
 
   if (!article) {
     notFound();
   }
 
   const related = stories.filter((item) => item.id !== article.id).slice(0, 3);
+  const bodyText = article.content || article.summary;
+  const paragraphs = bodyText
+    .split(/\n\s*\n|(?<=[.!?])\s+(?=[A-Z0-9])/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
   return (
     <div className="detail-shell">
+      <header className="masthead detail-masthead">
+        <div className="brand-group">
+          <span className="live-pill">Live</span>
+          <span className="brand-name">UHNEWS</span>
+        </div>
+        <div className="brand-note">Latest headlines • global brief</div>
+      </header>
+
       <article className="detail-card">
         <div
           className="detail-cover"
@@ -72,7 +99,11 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ id:
           </div>
 
           <h1>{article.title}</h1>
-          <p className="detail-summary">{article.summary}</p>
+          <div className="detail-summary">
+            {paragraphs.map((paragraph, index) => (
+              <p key={`${article.id}-paragraph-${index}`}>{paragraph.trim()}</p>
+            ))}
+          </div>
 
           <div className="detail-actions">
             <a href={article.url} target="_blank" rel="noreferrer" className="detail-primary">
@@ -107,7 +138,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ id:
                     <span>{story.source}</span>
                     <span>{new Date(story.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                   </div>
-                  <Link href={`/news/${story.id}`} className="story-link">
+                  <Link href={`/news/${toArticleSlug(story)}`} className="story-link">
                     Read article
                   </Link>
                 </div>

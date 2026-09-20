@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { NewsItem } from "@/lib/news-store";
+import { toArticleSlug } from "@/lib/article-utils";
+import type { NewsItem } from "@/lib/news-store";
 
 function StorySkeleton() {
   return (
@@ -99,7 +100,7 @@ export default function HomePage() {
                   <span className="meta-divider">•</span>
                   <span>{new Date(featuredStory.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                 </div>
-                <Link href={`/news/${featuredStory.id}`} className="read-more-button">
+                <Link href={`/news/${toArticleSlug(featuredStory)}`} className="read-more-button">
                   Read full story
                 </Link>
               </div>
@@ -127,7 +128,7 @@ export default function HomePage() {
                         <span>{story.source}</span>
                         <span>{new Date(story.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                       </div>
-                      <Link href={`/news/${story.id}`} className="story-link">
+                      <Link href={`/news/${toArticleSlug(story)}`} className="story-link">
                         Read article
                       </Link>
                     </div>
