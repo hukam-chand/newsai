@@ -197,6 +197,86 @@ function buildSummaryFromContent(value: string): string {
   return `${cleaned.slice(0, 177).trimEnd()}...`;
 }
 
+function isLowQualityBlock(block: string): boolean {
+  const text = block.trim();
+  const lower = text.toLowerCase();
+
+  if (!text || text.length < 50) return true;
+  if (/(advertisement|subscribe|sign in|log in|newsletter|cookie|privacy policy|terms of use|read more|watch now|follow us|share this|commentary|related stories)/i.test(lower)) {
+    return true;
+  }
+  if (text.split(/\s+/).length < 8) return true;
+  if (/^(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+[A-Z][a-z]+){0,3}$/.test(text) && text.length < 90) {
+    return true;
+  }
+
+  return false;
+}
+
+function isLowQualityArticle(text: string): boolean {
+  const cleaned = normalizeStoryText(text);
+  if (!cleaned || cleaned.length < 180) return true;
+  if (cleaned.split(/\s+/).length < 25) return true;
+  return false;
+}
+
+function extractArticleTextFromHtml(html: string): string {
+  const cleanedHtml = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>|<\/div>|<\/li>|<\/h[1-6]>|<\/article>|<\/section>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#8217;/gi, "'")
+    .replace(/&#8220;/gi, '"')
+    .replace(/&#8221;/gi, '"')
+    .replace(/&#8211;/gi, "-")
+    .replace(/&#8212;/gi, "—")
+    .replace(/\s+\n\s*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
+
+  const blocks = cleanedHtml
+    .split(/\n+/)
+    .map((block) => block.replace(/\s+/g, " ").trim())
+    .filter((block) => !isLowQualityBlock(block))
+    .slice(0, 18);
+
+  return blocks.join("\n\n");
+}
+
+async function fetchFullArticleText(url: string): Promise<string> {
+  if (!url) return "";
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; UHNEWS/1.0; +https://uhnews.vercel.app)",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      redirect: "follow",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return "";
+    }
+
+    const html = await response.text();
+    const text = extractArticleTextFromHtml(html);
+    return normalizeStoryText(text || "");
+  } catch {
+    return "";
+  }
+}
+
 function toId(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
@@ -208,7 +288,7 @@ const RSS_SOURCES = [
   { name: "NPR", url: "https://feeds.npr.org/1001/rss.xml" },
 ];
 
-function parseRssXml(xml: string, sourceName: string): NewsItem[] {
+async function parseRssXml(xml: string, sourceName: string): Promise<NewsItem[]> {
   const itemPattern =
     /<item>[\s\S]*?<title>(?:<!\[CDATA\[)?(.*?)?(?:\]\]>)?<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?(?:<pubDate>(.*?)<\/pubDate>|<published>(.*?)<\/published>|<dc:date>(.*?)<\/dc:date>)[\s\S]*?(?:<description>(?:<!\[CDATA\[)?(.*?)?(?:\]\]>)?<\/description>|<content:encoded>(?:<!\[CDATA\[)?(.*?)?(?:\]\]>)?<\/content:encoded>)/gi;
   const entries: NewsItem[] = [];
@@ -218,20 +298,27 @@ function parseRssXml(xml: string, sourceName: string): NewsItem[] {
     const url = stripHtml(match[2] ?? "").trim();
     const publishedAt = stripHtml(match[3] ?? match[4] ?? match[5] ?? "").trim();
     const rawBody = (match[6] ?? match[7] ?? "").trim();
-    const content = normalizeStoryText(rawBody || `${title} — a timely update from the current news cycle.`);
 
     if (!title || !url) continue;
 
     const cleanTitle = title.replace(new RegExp(`\\s*\\|\\s*${sourceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.*$`, "i"), "").trim();
     const isoDate = new Date(publishedAt || Date.now()).toISOString();
     const category = categoryFromTitle(cleanTitle);
-    const summary = buildSummaryFromContent(content);
+    const fallbackBody = normalizeStoryText(rawBody || `${cleanTitle} — a timely update from the current news cycle.`);
+    const fetchedFullText = await fetchFullArticleText(url);
+    const fullBody = fetchedFullText || fallbackBody;
+
+    if (isLowQualityArticle(fullBody)) {
+      continue;
+    }
+
+    const summary = buildSummaryFromContent(fullBody);
 
     entries.push({
       id: toId(`${cleanTitle}-${url}`),
       title: cleanTitle,
       summary,
-      content,
+      content: fullBody,
       source: sourceName,
       publishedAt: isoDate,
       image: FALLBACK_IMAGES[entries.length % FALLBACK_IMAGES.length],
@@ -243,7 +330,7 @@ function parseRssXml(xml: string, sourceName: string): NewsItem[] {
   return entries.slice(0, 12);
 }
 
-function parseGoogleNewsXml(xml: string): NewsItem[] {
+async function parseGoogleNewsXml(xml: string): Promise<NewsItem[]> {
   return parseRssXml(xml, "Google News");
 }
 
@@ -351,7 +438,7 @@ export async function refreshNewsFromGoogle(): Promise<NewsItem[]> {
       }
 
       const xml = await response.text();
-      const items = parseRssXml(xml, source.name);
+      const items = await parseRssXml(xml, source.name);
       details[source.name] = items.length;
 
       for (const item of items) {
@@ -375,7 +462,7 @@ export async function refreshNewsFromGoogle(): Promise<NewsItem[]> {
   if (supabase) {
     const rows = result.map((item) => ({
       title: item.title,
-      content: item.summary,
+      content: item.content || item.summary,
       url: item.url,
       source: item.source,
       published_at: item.publishedAt,
