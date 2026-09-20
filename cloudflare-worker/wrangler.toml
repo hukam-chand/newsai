@@ -1,0 +1,19 @@
+name = "newsai-cron"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Cron trigger: every 10 minutes.
+# Cloudflare cron uses standard 5-field syntax (minute hour day month weekday).
+[triggers]
+crons = ["*/10 * * * *"]
+
+# Non-secret variables. Set SCRAPE_URL to your deployed app, e.g.
+# https://your-app.vercel.app/api/scrape
+# Keep CRON_SECRET out of this file — add it with:
+#   wrangler secret put CRON_SECRET
+[vars]
+SCRAPE_URL = "https://your-app.vercel.app/api/scrape"
+
+# Local development values. `wrangler dev` reads .dev.vars (git-ignored).
+# Create cloudflare-worker/.dev.vars with:
+#   CRON_SECRET="your-random-string"
