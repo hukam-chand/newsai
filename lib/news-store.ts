@@ -12,7 +12,10 @@ export type NewsItem = {
   category: string;
 };
 
-const STORAGE_FILE = path.join(process.cwd(), "data", "news.json");
+const STORAGE_DIR =
+  process.env.NEWS_STORAGE_DIR ||
+  (process.platform === "win32" ? "C:\\tmp\\uhnews" : "/tmp/uhnews");
+const STORAGE_FILE = path.join(STORAGE_DIR, "news.json");
 const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1600&q=80",
   "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=900&q=80",
